@@ -280,18 +280,25 @@ app.post('/convert-url', async (req, res) => {
     const outputFileName = `converted-${jobId}-480p.mp4`;
     const outputPath = path.join(outputDir, outputFileName);
 
+    // Initialize job status immediately
+    conversionJobs.set(jobId, { status: 'starting', progress: 0 });
+    console.log(`Created job ${jobId} for URL: ${url}`);
+
     // Start the conversion process asynchronously
     (async () => {
       try {
+        conversionJobs.set(jobId, { status: 'downloading', progress: 10 });
         console.log(`Downloading video from URL: ${url}`);
         await downloadVideo(url, tempPath);
         
+        conversionJobs.set(jobId, { status: 'processing', progress: 20 });
         console.log(`Converting video to 480p: ${tempPath} -> ${outputPath}`);
         await convertTo480p(tempPath, outputPath, jobId);
         
         // Clean up temp file
         await fs.remove(tempPath);
         
+        conversionJobs.set(jobId, { status: 'completed', progress: 100 });
         console.log(`Job ${jobId} completed successfully`);
       } catch (error) {
         console.error(`Job ${jobId} failed:`, error);
@@ -323,14 +330,20 @@ app.post('/upload', upload.single('video'), async (req, res) => {
     const outputFileName = `converted-${jobId}-480p.mp4`;
     const outputPath = path.join(outputDir, outputFileName);
 
+    // Initialize job status immediately
+    conversionJobs.set(jobId, { status: 'starting', progress: 0 });
+    console.log(`Created upload job ${jobId} for file: ${req.file.originalname}`);
+
     // Start conversion asynchronously
     (async () => {
       try {
+        conversionJobs.set(jobId, { status: 'processing', progress: 10 });
         await convertTo480p(inputPath, outputPath, jobId);
         
         // Clean up uploaded file
         await fs.remove(inputPath);
         
+        conversionJobs.set(jobId, { status: 'completed', progress: 100 });
         console.log(`Job ${jobId} completed successfully`);
       } catch (error) {
         console.error(`Job ${jobId} failed:`, error);
@@ -353,10 +366,14 @@ app.post('/upload', upload.single('video'), async (req, res) => {
 // Check conversion status
 app.get('/status/:jobId', (req, res) => {
   const { jobId } = req.params;
+  console.log(`Status check for job: ${jobId}`);
+  console.log(`Available jobs:`, Array.from(conversionJobs.keys()));
+  
   const job = conversionJobs.get(jobId);
   
   if (!job) {
-    return res.status(404).json({ success: false, error: 'Job not found' });
+    console.log(`Job ${jobId} not found`);
+    return res.status(404).json({ success: false, error: 'Job not found', jobId: jobId });
   }
   
   const response = { ...job };
@@ -367,6 +384,7 @@ app.get('/status/:jobId', (req, res) => {
     response.downloadUrl = `/videos/${outputFileName}`;
   }
   
+  console.log(`Job ${jobId} status:`, response);
   res.json(response);
 });
 

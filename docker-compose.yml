@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  video-encoder:
+    build: .
+    container_name: video-encoder-server
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    volumes:
+      # Persist converted videos
+      - ./output:/app/output
+      # Persist uploads (optional)
+      - ./uploads:/app/uploads
+      # Persist logs
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Resource limits (adjust based on your server)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  # Optional: Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: video-encoder-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./output:/var/www/videos:ro
+      # For SSL certificates (if needed)
+      # - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - video-encoder
+    restart: unless-stopped
+
+networks:
+  default:
+    driver: bridge
